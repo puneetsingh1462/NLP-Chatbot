@@ -1,6 +1,7 @@
 # Zuzu Food Ordering Chatbot
 
-Zuzu is a FastAPI webhook for a Dialogflow food-ordering chatbot backed by MySQL. It supports adding items to an order, resolving ambiguous menu names, calculating totals, saving completed orders to the database, and tracking order status.
+Zuzu is an **NLP-powered restaurant ordering chatbot** built using **Dialogflow, FastAPI, and MySQL**.  
+The system allows users to place food orders conversationally, resolve ambiguous menu items, calculate totals, and track order status.
 
 ## Features
 
@@ -14,10 +15,10 @@ Zuzu is a FastAPI webhook for a Dialogflow food-ordering chatbot backed by MySQL
 
 ## Project Structure
 
-- [main.py](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/main.py): FastAPI webhook and Dialogflow intent handlers
-- [db_helper.py](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/db_helper.py): MySQL connection helpers, menu lookup, pricing, and stored procedure calls
-- [stored_procedures.sql](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/stored_procedures.sql): MySQL schema/procedure changes used by the application
-- [zuzu.html](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/zuzu.html): Dialogflow Messenger test page
+- [main.py] FastAPI webhook and Dialogflow intent handlers
+- [db_helper.py] MySQL connection helpers, menu lookup, pricing, and stored procedure calls
+- [stored_procedures.sql] MySQL schema/procedure changes used by the application
+- [zuzu.html] Dialogflow Messenger test page
 
 ## Tech Stack
 
@@ -148,7 +149,7 @@ When Dialogflow sends `Track.order`, the application:
 
 ## Atomic Order Creation
 
-Order creation is handled in one transaction inside [db_helper.py](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/db_helper.py).
+Order creation is handled in one transaction inside helper file.
 
 `create_order_with_items()`:
 
@@ -170,13 +171,12 @@ pip install fastapi uvicorn mysql-connector-python
 
 ### 2. Configure MySQL connection
 
-Edit [db_helper.py](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/db_helper.py):
 
 ```python
 return mysql.connector.connect(
     host="localhost",
     user="root",
-    password="root",
+    password="1234567890",
     database="pandeyji_eatery"
 )
 ```
@@ -185,7 +185,7 @@ Update these values for your machine before publishing the project.
 
 ### 3. Apply stored procedures
 
-Run the SQL from [stored_procedures.sql](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/stored_procedures.sql) in your MySQL database.
+Run the SQL from in your MySQL database.
 
 This file:
 
@@ -257,28 +257,35 @@ And in MySQL `orders`, a row looks like:
 
 ## Current Limitations
 
-- `completed_orders` in [main.py](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/main.py) is still in-memory only
-- Dialogflow multi-turn ambiguity handling is not fully implemented yet
-- credentials are currently hardcoded in [db_helper.py](/abs/path/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/db_helper.py)
+Orders stored in memory before completion
+No authentication
+No containerization
+No automated tests
+Credentials hardcoded
 
-## Recommended Next Improvements
-
-- move DB credentials to environment variables
-- add proper logging instead of prints
-- add request validation and structured error handling
-- persist session/order state outside process memory
-- add automated tests for menu matching and order completion
-- add a single stored procedure that creates the order and inserts all rows entirely inside MySQL if you want the whole workflow to live in the DB layer
-
+Future Improvements
+Move DB credentials to environment variables
+Add Docker support
+Add logging system
+Add conversation memory
+Add LLM response generation
+Add RAG menu retrieval
+Add unit tests
+Add cloud deployment (AWS/GCP)
 ## GitHub Preparation Checklist
 
-Before pushing:
+Why this project matters:
 
-- remove or replace hardcoded DB credentials
-- add screenshots if you want a better project page
-- verify Dialogflow webhook settings
-- decide whether to include `ngrok.exe` and the zip file in the repository
+This project demonstrates:
+
+NLP integration
+Backend API development
+Database design
+Conversational AI logic
+Context management
+Order workflow automation
 
 ## License
+MIT License
 
-Add the license you want before publishing, for example MIT.
+
