@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<div class="container">
+
+<header>
+    <nav>
+        <a href="#home">HOME</a> |
+        <a href="#menu">MENU</a> |
+        <a href="#location">LOCATION</a> |
+        <a href="#aboutus">ABOUT US</a> |
+        <a href="#contactus">CONTACT US</a>
+    </nav>
+</header>
+
+<section id="home">
+    <img src="banner.jpg">
+</section>
+
+<section id="menu">
+    <h2>Our Menu</h2>
+    <div class="grid-container">
+        <img src="menu1.jpg">
+        <img src="menu2.jpg">
+        <img src="menu3.jpg">
+    </div>
+</section>
+
+<section id="location">
+    <h2>Location</h2>
+    <p>38 Patli Gali, Mumbai</p>
+</section>
+
+<section id="contactus">
+    <h2>Contact Us</h2>
+    <p>
+        Got questions? Want to place an order?
+        Call us at +91791234567
+        or email info@atliqfastfood.com
+    </p>
+</section>
+
+</div>
+
+
+<!-- Dialogflow Messenger -->
+<script src="https://www.gstatic.com/dialogflow-console/fast/messenger/bootstrap.js?v=1"></script>
+
+<df-messenger
+  intent="WELCOME"
+  chat-title="Zuzu Chatbot"
+  agent-id="2bd79d11-49a2-49ce-80ec-4096002e4994"
+  language-code="en"
+></df-messenger>
+
+
+</body>
+</html>

@@ -1,24 +1,31 @@
 # Zuzu Food Ordering Chatbot
 
-Zuzu is an **NLP-powered restaurant ordering chatbot** built using **Dialogflow, FastAPI, and MySQL**.  
-The system allows users to place food orders conversationally, resolve ambiguous menu items, calculate totals, and track order status.
+Zuzu is a restaurant ordering chatbot built with FastAPI, Dialogflow, and MySQL. The project now includes both the backend webhook and a simple frontend landing page with an embedded Dialogflow Messenger chat widget.
 
 ## Features
 
-- Add menu items to an in-progress order from Dialogflow intents
-- Resolve partial item names such as `lassi` to `Mango Lassi` when there is only one valid match
-- Ask for clarification when a menu name is ambiguous, such as `dosa`
-- Calculate order totals from the `food_items` table
-- Save completed orders into MySQL using stored procedures
-- Save order status in `order_tracking`
+- Conversational food ordering through Dialogflow
+- Add items to an active order
+- Remove items or reduce quantity from an active order
+- Resolve partial menu names such as `lassi`
+- Ask for clarification when a menu name matches multiple items
+- Calculate totals from menu prices stored in MySQL
+- Create orders atomically using stored procedures
 - Track order status by `order_id`
+- Static frontend page with menu, location, contact details, and chatbot widget
 
 ## Project Structure
 
-- [main.py] FastAPI webhook and Dialogflow intent handlers
-- [db_helper.py] MySQL connection helpers, menu lookup, pricing, and stored procedure calls
-- [stored_procedures.sql] MySQL schema/procedure changes used by the application
-- [zuzu.html] Dialogflow Messenger test page
+- [main.py](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/main.py): FastAPI webhook and Dialogflow intent handlers
+- [db_helper.py](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/db_helper.py): MySQL connection helpers and order persistence logic
+- [stored_procedures.sql](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/stored_procedures.sql): MySQL procedure definitions
+- [frontend/home.html](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/home.html): Static frontend entry page
+- [frontend/styles.css](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/styles.css): Frontend styling
+- [frontend/banner.jpg](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/banner.jpg): Hero banner image
+- [frontend/menu1.jpg](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/menu1.jpg): Menu image 1
+- [frontend/menu2.jpg](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/menu2.jpg): Menu image 2
+- [frontend/menu3.jpg](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/menu3.jpg): Menu image 3
+- [zuzu.html](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/zuzu.html): Dialogflow Messenger test page
 
 ## Tech Stack
 
@@ -26,144 +33,88 @@ The system allows users to place food orders conversationally, resolve ambiguous
 - FastAPI
 - MySQL
 - Dialogflow
-- Dialogflow Messenger
+- HTML/CSS
 
-## Database Design
+## Backend Flow
 
-The application uses three main tables:
+### Add items
 
-### `food_items`
-
-Stores the menu.
-
-Expected columns:
-
-- `item_id`
-- `name`
-- `price`
-
-Example menu:
-
-- Pav Bhaji
-- Chole Bhature
-- Pizza
-- Mango Lassi
-- Masala Dosa
-- Vegetable Biryani
-- Vada Pav
-- Rava Dosa
-- Samosa
-
-### `order_tracking`
-
-Stores one row per order with the order status.
-
-Important change:
-
-- `order_id` is now `AUTO_INCREMENT`
-
-This avoids Python-side `MAX(order_id) + 1` generation and is safer for concurrent requests.
-
-### `orders`
-
-Stores one row per ordered item.
-
-Columns:
-
-- `order_id`
-- `item_id`
-- `quantity`
-- `total_price`
-
-Example row:
-
-```text
-order_id = 45
-item_id = 1
-quantity = 2
-total_price = 12.00
-```
-
-## Stored Procedures
-
-The project uses stored procedures for writing orders to the database.
-
-### `create_order_entry`
-
-Purpose:
-
-- Inserts a new row into `order_tracking`
-- Returns the generated `order_id`
-
-Why it exists:
-
-- Keeps order ID generation inside MySQL
-- Reduces race-condition risk for concurrent users
-
-### `insert_order_item`
-
-Purpose:
-
-- Accepts a food item name, quantity, and order ID
-- Looks up the `item_id` and price from `food_items`
-- Calculates line-level total price
-- Inserts one row into `orders`
-
-## Order Flow
-
-### 1. Add items
-
-Dialogflow sends the `Order.add-context:ongoing-order` intent to the webhook.
-
-The application:
+The `Order.add-context:ongoing-order` intent:
 
 - reads `number` and `Food-Item`
-- resolves menu names using `find_matching_food_items()`
-- auto-selects a single valid match
-- asks for clarification if multiple items match
-- stores the in-progress order in Dialogflow output context
+- resolves the item against the menu
+- accumulates quantity if the same item is added again
+- stores the active order inside Dialogflow context
 
-Examples:
+Example:
 
-- `1 lassi` -> auto-resolves to `Mango Lassi`
-- `1 dosa` -> asks whether the user means `Masala Dosa` or `Rava Dosa`
+- `1 pizza` then `1 pizza` becomes `2 x Pizza`
 
-### 2. Complete order
+### Remove items
 
-When Dialogflow sends `Order.complete`, the application:
+The `Order.remove-context:ongoing-order` intent:
 
-- loads the order from the `ongoing-order` context
+- reads `number` and `Food-Item`
+- resolves the item against the menu
+- subtracts the requested quantity from the active order
+- removes the item entirely if the remaining quantity is `0`
+- returns an error if the user tries to remove more than they currently have
+
+Example:
+
+- `2 x Pizza, 1 x Mango Lassi`
+- `remove 1 pizza`
+- result: `1 x Pizza, 1 x Mango Lassi`
+
+### Complete order
+
+The `Order.complete` intent:
+
+- loads the active order from context
 - resolves item names again before persistence
-- calculates the total from menu prices
+- calculates the total from `food_items`
 - creates the order in MySQL
-- inserts one row per item into `orders`
-- returns the generated order ID and total to the user
+- inserts the order items in one transaction
+- returns the generated order ID and total price
 
-### 3. Track order
+### Track order
 
-When Dialogflow sends `Track.order`, the application:
+The `Track.order` intent:
 
 - reads the order ID
 - looks up the status in `order_tracking`
-- sends the status back through output context
+- sends the result back through Dialogflow context
 
-## Atomic Order Creation
+## Database Notes
 
-Order creation is handled in one transaction inside helper file.
+The backend expects these main tables:
 
-`create_order_with_items()`:
+- `food_items`
+- `orders`
+- `order_tracking`
 
-- calls `create_order_entry`
-- receives the new `order_id`
-- calls `insert_order_item` for each item
-- commits only if all inserts succeed
-- rolls back the transaction if any insert fails
+`order_tracking.order_id` should be `AUTO_INCREMENT`, so concurrent order creation does not rely on Python-side ID generation.
 
-This is better than separate independent inserts because it prevents partial order writes.
+Stored procedures in [stored_procedures.sql](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/stored_procedures.sql):
+
+- `create_order_entry`
+- `insert_order_item`
+
+## Frontend
+
+The frontend lives in [frontend/home.html](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/home.html). It includes:
+
+- navigation links
+- a restaurant banner
+- menu image gallery
+- location and contact sections
+- Dialogflow Messenger embedded directly on the page
+
+The chat widget is configured with the Dialogflow agent ID already present in the HTML.
 
 ## Setup
 
-### 1. Install Python packages
+### 1. Install backend dependencies
 
 ```bash
 pip install fastapi uvicorn mysql-connector-python
@@ -171,121 +122,69 @@ pip install fastapi uvicorn mysql-connector-python
 
 ### 2. Configure MySQL connection
 
-
-```python
-return mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="1234567890",
-    database="pandeyji_eatery"
-)
-```
-
-Update these values for your machine before publishing the project.
+Update [db_helper.py](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/db_helper.py) with your local database credentials.
 
 ### 3. Apply stored procedures
 
-Run the SQL from in your MySQL database.
+Run [stored_procedures.sql](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/stored_procedures.sql) in your MySQL database.
 
-This file:
-
-- modifies `order_tracking.order_id` to `AUTO_INCREMENT`
-- creates `create_order_entry`
-- creates `insert_order_item`
-
-### 4. Start the API
+### 4. Start the backend
 
 ```bash
 uvicorn main:app --reload
 ```
 
-### 5. Expose the webhook
-
-If Dialogflow needs a public URL, use ngrok or another tunnel:
+### 5. Expose the webhook if needed
 
 ```bash
 ngrok http 8000
 ```
 
-Then configure the Dialogflow webhook URL to:
+Then configure Dialogflow webhook fulfillment to:
 
 ```text
 https://your-public-url/webhook
 ```
 
-## Dialogflow Notes
+### 6. Run the frontend
 
-The webhook logic assumes these intents exist:
+Open [frontend/home.html](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/frontend/home.html) in a browser, or serve the folder with a static server.
+
+Example:
+
+```bash
+python -m http.server 5500
+```
+
+Then open:
+
+```text
+http://localhost:5500/frontend/home.html
+```
+
+## Dialogflow Intents Used
 
 - `Order.add-context:ongoing-order`
+- `Order.remove-context:ongoing-order`
 - `Order.complete`
 - `Track.order`
 
-Important note:
-
-- If Dialogflow fallback responses are still showing instead of webhook responses, check the static `Responses` section in the matched intent and ensure webhook fulfillment is enabled.
-
-For ambiguous items like `dosa`, the recommended Dialogflow setup is:
-
-- let the webhook receive the raw item text
-- avoid hard-mapping `dosa` directly to a single menu item
-
-## Example Completed Order
-
-After order completion, the backend stores a structure like:
-
-```python
-{
-    "order_id": 45,
-    "items": [
-        {
-            "order_id": 45,
-            "item_id": 1,
-            "quantity": 1,
-            "total_price": 6.0
-        }
-    ],
-    "total_price": 6.0
-}
-```
-
-And in MySQL `orders`, a row looks like:
-
-```text
-45 | 1 | 1 | 6.00
-```
-
 ## Current Limitations
 
-Orders stored in memory before completion
-No authentication
-No containerization
-No automated tests
-Credentials hardcoded
+- Active order state still depends on Dialogflow context
+- Database credentials are hardcoded in [db_helper.py](/C:/Users/TUF%20GAMING/Desktop/AI/ZUZU/db_helper.py)
+- The frontend is static and not connected to the backend except through Dialogflow Messenger
+- No automated tests or load testing are included yet
 
-Future Improvements
-Move DB credentials to environment variables
-Add Docker support
-Add logging system
-Add conversation memory
-Add LLM response generation
-Add RAG menu retrieval
-Add unit tests
-Add cloud deployment (AWS/GCP)
-## GitHub Preparation Checklist
+## Next Improvements
 
-Why this project matters:
-
-This project demonstrates:
-
-NLP integration
-Backend API development
-Database design
-Conversational AI logic
-Context management
-Order workflow automation
+- move DB credentials to environment variables
+- add connection pooling
+- persist active carts outside Dialogflow context
+- add automated tests for add, remove, and complete order flows
+- improve frontend styling and responsiveness
+- deploy frontend and backend separately for production
 
 ## License
-MIT License
 
-
+Add the license you want before publishing, for example MIT.
