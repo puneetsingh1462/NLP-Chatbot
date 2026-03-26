@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.idea/
+.venv/
+venv/
+
+ngrok-v3-stable-windows-amd64/
+ngrok-v3-stable-windows-amd64.zip
+ngrok.exe
+
+.env
