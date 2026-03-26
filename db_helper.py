@@ -5,13 +5,12 @@ def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="#Aibot",   # change this
+        password="root",   # change this
         database="pandeyji_eatery"
     )
 
 
 def get_order_status(order_id):
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
