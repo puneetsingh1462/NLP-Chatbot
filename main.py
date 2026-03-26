@@ -28,6 +28,45 @@ def extract_session_id(output_contexts):
     return None
 
 
+def get_session_order_state(output_contexts, session_id):
+
+    session_orders = {}
+    current_order = {}
+
+    for context in output_contexts:
+        if context.get("name", "").endswith("/contexts/ongoing-order"):
+            context_parameters = context.get("parameters", {})
+            session_orders = dict(context_parameters.get("session_orders", {}))
+            current_order = dict(session_orders.get(session_id, {})) if session_id else {}
+            break
+
+    return session_orders, current_order
+
+
+def build_order_context(session_id, session_orders, lifespan_count=5):
+
+    return [
+        {
+            "name": f"projects/zuzu-qlyg/agent/sessions/{session_id}/contexts/ongoing-order",
+            "lifespanCount": lifespan_count,
+            "parameters": {
+                "session_orders": session_orders
+            }
+        }
+    ]
+
+
+def build_order_summary(current_order):
+
+    if not current_order:
+        return "Your order is now empty."
+
+    order_summary = ", ".join(
+        f"{quantity} x {item}" for item, quantity in current_order.items()
+    )
+    return f"You have this order: {order_summary}. Anything else you need?"
+
+
 # -------- TRACK ORDER FUNCTION -------- #
 
 def track_order(parameters, session_id):
@@ -65,13 +104,7 @@ def add_to_order(parameters, session_id, output_contexts):
     if not isinstance(food_items, list):
         food_items = [food_items] if food_items is not None else []
 
-    session_orders = {}
-
-    for context in output_contexts:
-        if context.get("name", "").endswith("/contexts/ongoing-order"):
-            context_parameters = context.get("parameters", {})
-            session_orders = dict(context_parameters.get("session_orders", {}))
-            break
+    session_orders, current_order = get_session_order_state(output_contexts, session_id)
 
     if len(numbers) < len(food_items):
         return {
@@ -96,29 +129,93 @@ def add_to_order(parameters, session_id, output_contexts):
 
         resolved_items.append(matches[0])
 
-    current_order = dict(session_orders.get(session_id, {})) if session_id else {}
-
     for quantity, item in zip(numbers, resolved_items):
-        current_order[item] = quantity
+        current_order[item] = current_order.get(item, 0) + int(quantity)
 
     if session_id:
         session_orders[session_id] = current_order
 
-    order_summary = ", ".join(
-        f"{quantity} x {item}" for item, quantity in current_order.items()
-    )
+    return {
+        "fulfillmentText": build_order_summary(current_order),
+        "outputContexts": build_order_context(session_id, session_orders)
+    }
+
+
+def remove_from_order(parameters, session_id, output_contexts):
+
+    numbers = parameters.get("number", [])
+    food_items = parameters.get("Food-Item") or parameters.get("food-item", [])
+
+    if not isinstance(numbers, list):
+        numbers = [numbers] if numbers is not None else []
+
+    if not isinstance(food_items, list):
+        food_items = [food_items] if food_items is not None else []
+
+    session_orders, current_order = get_session_order_state(output_contexts, session_id)
+
+    if not current_order:
+        return {
+            "fulfillmentText": "I could not find any active order to update."
+        }
+
+    if len(numbers) < len(food_items):
+        return {
+            "fulfillmentText": "Please specify the quantity to remove."
+        }
+
+    resolved_items = []
+
+    for item in food_items:
+        matches = find_matching_food_items(item)
+
+        if not matches:
+            return {
+                "fulfillmentText": f"I could not find {item} on the menu."
+            }
+
+        if len(matches) > 1:
+            options = " or ".join(matches)
+            return {
+                "fulfillmentText": f"I found multiple matches for {item}. Did you mean {options}?"
+            }
+
+        resolved_items.append(matches[0])
+
+    for quantity, item in zip(numbers, resolved_items):
+        remove_qty = int(quantity)
+        existing_qty = int(current_order.get(item, 0))
+
+        if existing_qty == 0:
+            return {
+                "fulfillmentText": f"{item} is not in your current order."
+            }
+
+        if remove_qty > existing_qty:
+            return {
+                "fulfillmentText": f"You only have {existing_qty} x {item} in your order."
+            }
+
+        remaining_qty = existing_qty - remove_qty
+
+        if remaining_qty > 0:
+            current_order[item] = remaining_qty
+        else:
+            del current_order[item]
+
+    if session_id:
+        if current_order:
+            session_orders[session_id] = current_order
+            output_contexts = build_order_context(session_id, session_orders)
+        else:
+            session_orders.pop(session_id, None)
+            output_contexts = build_order_context(session_id, session_orders, lifespan_count=0)
+    else:
+        output_contexts = []
 
     return {
-        "fulfillmentText": f"You have this order: {order_summary}. Anything else you need?",
-        "outputContexts": [
-            {
-                "name": f"projects/zuzu-qlyg/agent/sessions/{session_id}/contexts/ongoing-order",
-                "lifespanCount": 5,
-                "parameters": {
-                    "session_orders": session_orders
-                }
-            }
-        ]
+        "fulfillmentText": build_order_summary(current_order),
+        "outputContexts": output_contexts
     }
 
 
@@ -144,15 +241,7 @@ def resolve_order_items(order_map):
 def complete_order(parameters, output_contexts):
 
     session_id = extract_session_id(output_contexts)
-    order_map = {}
-    session_orders = {}
-
-    for context in output_contexts:
-        if context.get("name", "").endswith("/contexts/ongoing-order"):
-            context_parameters = context.get("parameters", {})
-            session_orders = dict(context_parameters.get("session_orders", {}))
-            order_map = dict(session_orders.get(session_id, {})) if session_id else {}
-            break
+    session_orders, order_map = get_session_order_state(output_contexts, session_id)
 
     if not order_map:
         return {
@@ -206,15 +295,7 @@ def complete_order(parameters, output_contexts):
 
     return {
         "fulfillmentText": f"Your order has been placed. Your order ID is {order_id}. Total price is {total_price:.2f}.",
-        "outputContexts": [
-            {
-                "name": f"projects/zuzu-qlyg/agent/sessions/{session_id}/contexts/ongoing-order",
-                "lifespanCount": 0,
-                "parameters": {
-                    "session_orders": session_orders
-                }
-            }
-        ]
+        "outputContexts": build_order_context(session_id, session_orders, lifespan_count=0)
     }
 
 
@@ -236,6 +317,9 @@ async def webhook(request: Request):
 
     elif intent == "Order.add-context:ongoing-order":
         response = add_to_order(parameters, session_id, output_contexts)
+
+    elif intent == "Order.remove-context:ongoing-order":
+        response = remove_from_order(parameters, session_id, output_contexts)
 
     elif intent == "Order.complete":
         response = complete_order(parameters, output_contexts)
